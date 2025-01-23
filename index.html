@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en-us">
+<head>
+    <title>ggwave : javascript example</title>
+    <style>
+        /* General styles */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #1e1e2f;
+            color: #e5e5e5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #main-container {
+            background-color: #2b2b3d;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        textarea {
+            background-color: #1e1e2f;
+            color: #e5e5e5;
+            border: 1px solid #444;
+            border-radius: 5px;
+            padding: 10px;
+            font-size: 16px;
+            resize: none;
+        }
+
+        button {
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button#captureStart {
+            background-color: #007bff;
+        }
+
+        button#captureStart:hover {
+            background-color: #0056b3;
+        }
+
+        button#captureStop {
+            background-color: #f44336;
+        }
+
+        button#captureStop:hover {
+            background-color: #d32f2f;
+        }
+
+        .cell-version {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #bdbdbd;
+        }
+
+        .nav-link {
+            color: #4caf50;
+            text-decoration: none;
+        }
+
+        .nav-link:hover {
+            text-decoration: underline;
+        }
+
+        #chat-log {
+            margin-top: 20px;
+            text-align: left;
+            background-color: #121220;
+            border: 1px solid #444;
+            border-radius: 5px;
+            padding: 10px;
+            height: 150px;
+            overflow-y: scroll;
+        }
+
+        #chat-log p {
+            margin: 5px 0;
+        }
+
+        @media (max-width: 600px) {
+            textarea {
+                font-size: 14px;
+            }
+
+            button {
+                padding: 8px 15px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="main-container">
+        <div><b>Minimal</b>: Data transfer using Sound</div>
+
+        <br>
+
+        <div>Tx Data:</div>
+        <textarea name="textarea" id="txData" style="width:100%;height:80px;">Hello javascript</textarea>
+
+        <button onclick="onSend();">Send</button>
+
+        <br>
+
+        <div>Rx data:</div>
+        <textarea name="textarea" id="rxData" style="width:100%;height:80px;" disabled></textarea>
+
+        <button id="captureStart">Start capturing</button>
+        <button id="captureStop" hidden>Stop capturing</button>
+
+        <div id="chat-log">
+            <p><strong>Chat Log:</strong></p>
+        </div>
+
+        <div class="cell-version">
+            <span>
+                
+                
+                Dev: <a class="nav-link" href="https://instagram.com/bayassiddhant">Siddhant B.</a> |
+            
+                 <a class="nav-link" href="instagram.com/vxo.cc">Vedant B.</a>
+            </span>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="minimal.js"></script>
+    <script type="text/javascript">
+        window.AudioContext = window.AudioContext || window.webkitAudioContext;
+        window.OfflineAudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+
+        var context = null;
+        var recorder = null;
+
+        // the ggwave module instance
+        var ggwave = null;
+        var parameters = null;
+        var instance = null;
+
+        // instantiate the ggwave instance
+        // ggwave_factory comes from the ggwave.js module
+        ggwave_factory().then(function (obj) {
+            ggwave = obj;
+        });
+
+        var txData = document.getElementById("txData");
+        var rxData = document.getElementById("rxData");
+        var captureStart = document.getElementById("captureStart");
+        var captureStop = document.getElementById("captureStop");
+        var chatLog = document.getElementById("chat-log");
+
+        // helper function
+        function convertTypedArray(src, type) {
+            var buffer = new ArrayBuffer(src.byteLength);
+            var baseView = new src.constructor(buffer).set(src);
+            return new type(buffer);
+        }
+
+        // initialize audio context and ggwave
+        function init() {
+            if (!context) {
+                context = new AudioContext({ sampleRate: 48000 });
+
+                parameters = ggwave.getDefaultParameters();
+                parameters.sampleRateInp = context.sampleRate;
+                parameters.sampleRateOut = context.sampleRate;
+                instance = ggwave.init(parameters);
+            }
+        }
+
+        //
+        // Tx
+        //
+
+        function onSend() {
+            init();
+
+            // pause audio capture during transmission
+            captureStop.click();
+
+            // generate audio waveform
+            var waveform = ggwave.encode(instance, txData.value, ggwave.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 10);
+
+            // play audio
+            var buf = convertTypedArray(waveform, Float32Array);
+            var buffer = context.createBuffer(1, buf.length, context.sampleRate);
+            buffer.getChannelData(0).set(buf);
+            var source = context.createBufferSource();
+            source.buffer = buffer;
+            source.connect(context.destination);
+            source.start(0);
+
+            // Add to chat log
+            var newMessage = document.createElement("p");
+            newMessage.innerText = `Sent: ${txData.value}`;
+            chatLog.appendChild(newMessage);
+        }
+
+        //
+        // Rx
+        //
+
+        captureStart.addEventListener("click", function () {
+            init();
+
+            let constraints = {
+                audio: {
+                    echoCancellation: false,
+                    autoGainControl: false,
+                    noiseSuppression: false,
+                },
+            };
+
+            navigator.mediaDevices.getUserMedia(constraints).then(function (e) {
+                mediaStream = context.createMediaStreamSource(e);
+
+                var bufferSize = 1024;
+                var numberOfInputChannels = 1;
+                var numberOfOutputChannels = 1;
+
+                if (context.createScriptProcessor) {
+                    recorder = context.createScriptProcessor(
+                        bufferSize,
+                        numberOfInputChannels,
+                        numberOfOutputChannels
+                    );
+                } else {
+                    recorder = context.createJavaScriptNode(
+                        bufferSize,
+                        numberOfInputChannels,
+                        numberOfOutputChannels
+                    );
+                }
+
+                recorder.onaudioprocess = function (e) {
+                    var source = e.inputBuffer;
+                    var res = ggwave.decode(instance, convertTypedArray(new Float32Array(source.getChannelData(0)), Int8Array));
+
+                    if (res && res.length > 0) {
+                        res = new TextDecoder("utf-8").decode(res);
+                        rxData.value = res;
+
+                        // Add to chat log
+                        var newMessage = document.createElement("p");
+                        newMessage.innerText = `Received: ${res}`;
+                        chatLog.appendChild(newMessage);
+                    }
+                };
+
+                mediaStream.connect(recorder);
+                recorder.connect(context.destination);
+            }).catch(function (e) {
+                console.error(e);
+            });
+
+            rxData.value = "Listening ...";
+            captureStart.hidden = true;
+            captureStop.hidden = false;
+        });
+
+        captureStop.addEventListener("click", function () {
+            if (recorder) {
+                recorder.disconnect(context.destination);
+                mediaStream.disconnect(recorder);
+                recorder = null;
+            }
+
+            rxData.value = "Audio capture is paused! Press the \"Start capturing\" button to analyze audio from the microphone";
+            captureStart.hidden = false;
+            captureStop.hidden = true;
+        });
+
+        captureStop.click();
+    </script>
+</body>
+</html>
